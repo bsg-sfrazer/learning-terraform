@@ -46,41 +46,45 @@ resource "aws_instance" "blog" {
 }
 
 module "alb" {
-  source = "terraform-aws-modules/alb/aws"
+  source  = "terraform-aws-modules/alb/aws"
+  version = "7.0.0"
 
-  name            = "myblog-alb"
-  vpc_id          = module.blog_vpc.vpc_id
-  subnets         = module.blog_vpc.public_subnets
-  security_groups = [ module.blog_sg.security_group_id ]
+  name = "blog-alb"
 
-  listeners = {
-    ex_http = {
-      port                        = 80
-      protocol                    = "HTTP"
+  load_balancer_type = "application"
 
-      forward = {
-        # The value of the `target_group_key` is the key used in the `target_groups` map below
-        target_group_key = "ex-instance"
+  vpc_id             = module.blog_vpc.vpc_id
+  subnets            = module.blog_vpc.public_subnets
+  security_groups    = [ module.blog_sg.security_group_id ]
+
+  target_groups = [
+    {
+      name_prefix      = "blog-"
+      backend_protocol = "HTTP"
+      backend_port     = 80
+      target_type      = "instance"
+      targets = {
+        my_target = {
+          target_id = aws_instance.blog.id
+          port = 80
+        }
       }
     }
-  }
+  ]
 
-  target_groups = {
-    # This key name is used by the listener/listener rules to know which target to forward traffic to
-    ex_instance = {
-      name_prefix                       = "blog"
-      protocol                          = "HTTP"
-      port                              = 80
-      target_type                       = "instance"
-      deregistration_delay              = 10
-      load_balancing_cross_zone_enabled = true
+  http_tcp_listeners = [
+    {
+      port               = 80
+      protocol           = "HTTP"
+      target_group_index = 0
     }
-  }
+  ]
 
   tags = {
     Environment = "Dev"
   }
 }
+
 
 module "blog_sg" {
   source  = "terraform-aws-modules/security-group/aws"
